@@ -1,0 +1,350 @@
+# hw definition file for processing by chibios_hwdef.py
+# for SimpliflyV6X custom hardware
+#
+# Custom board based on Pixhawk V6X FMU design with:
+#   SPI1  - ICM20649 IMU
+#   SPI3  - BMI088 IMU (accel + gyro)
+#   SPI5  - FM25V024-D FRAM (32KB)
+#   I2C1  - BMM150 compass
+#   I2C2  - external magnetometer port
+#   I2C3  - MS5611 footprint (empty on this board)
+#   I2C4  - BMP388 barometer + SE050 secure element
+#   I2C4  - SE050 secure element (no ArduPilot driver, pins defined only)
+#   IOMCU - STM32F103 IO processor on USART6 (same as Pixhawk V6X)
+#
+# IMPORTANT: HAL_CHIBIOS_ARCH_FMUV6 and AP_FEATURE_BOARD_DETECT are
+# intentionally NOT defined. This board has a different sensor combination
+# than the known Holybro/CUAV V6X variants, so board variant detection is
+# bypassed. Sensors are defined directly without BOARD_MATCH() conditionals.
+
+# MCU class and specific type
+MCU STM32H7xx STM32H743xx
+
+# crystal frequency
+OSCILLATOR_HZ 16000000
+
+# ChibiOS system timer
+STM32_ST_USE_TIMER 2
+
+# Board ID - MUST match the V6X bootloader flashed on the FMU
+# Tools/AP_Bootloader/board_types.txt: TARGET_HW_PX4_FMU_V6X
+APJ_BOARD_ID TARGET_HW_PX4_FMU_V6X
+
+# Firmware load offset - PX4 V6X bootloader places firmware at 128KB
+FLASH_RESERVE_START_KB 128
+
+# Required for PX4 V6X bootloader RAM map compatibility
+env USE_ALT_RAM_MAP 1
+
+# flash size
+FLASH_SIZE_KB 2048
+
+# default all pins to low output to prevent ESD damage on unused pads
+DEFAULTGPIO OUTPUT LOW PULLDOWN
+
+# --------------------------------------------------------------------------
+# USB
+# --------------------------------------------------------------------------
+PA11 OTG_FS_DM OTG1
+PA12 OTG_FS_DP OTG1
+PA9  VBUS INPUT OPENDRAIN
+
+# SWD debug
+PA13 JTMS-SWDIO SWD
+PA14 JTCK-SWCLK SWD
+
+# --------------------------------------------------------------------------
+# UART / Serial
+# SERIAL0 = USB   (OTG1)
+# SERIAL1 = TELEM1 (UART7)
+# SERIAL2 = TELEM2 (UART5)
+# SERIAL3 = GPS1   (USART1)
+# SERIAL4 = GPS2   (UART8)
+# SERIAL5 = TELEM3 (USART2)
+# SERIAL6 = DEBUG  (USART3)
+# --------------------------------------------------------------------------
+SERIAL_ORDER OTG1 UART7 UART5 USART1 UART8 USART2 USART3
+
+# TELEM1 (with flow control)
+PE8  UART7_TX  UART7
+PF6  UART7_RX  UART7
+PF8  UART7_RTS UART7
+PE10 UART7_CTS UART7
+
+# TELEM2 (with flow control)
+PC12 UART5_TX  UART5
+PD2  UART5_RX  UART5
+PC8  UART5_RTS UART5
+PC9  UART5_CTS UART5
+
+# TELEM3 (with flow control)
+PD5 USART2_TX  USART2
+PA3 USART2_RX  USART2
+PD4 USART2_RTS USART2
+PD3 USART2_CTS USART2
+
+# GPS1
+PB6 USART1_TX USART1
+PB7 USART1_RX USART1
+
+# GPS2
+PE1 UART8_TX UART8
+PE0 UART8_RX UART8
+
+# DEBUG UART
+PD8 USART3_TX USART3
+PD9 USART3_RX USART3
+
+# IOMCU - internal USART6 connection to STM32F103 IO processor
+# PC6 TX goes to IO RX; PC7 RX receives from IO
+PC6 USART6_TX USART6
+PC7 USART6_RX USART6
+IOMCU_UART USART6
+
+# --------------------------------------------------------------------------
+# SPI1 - ICM20649 IMU (Sensor 1)
+# --------------------------------------------------------------------------
+PA5 SPI1_SCK  SPI1
+PB5 SPI1_MOSI SPI1
+PG9 SPI1_MISO SPI1
+PI9 ICM20649_CS CS
+PF2 ICM20649_DRDY INPUT
+
+# --------------------------------------------------------------------------
+# SPI3 - BMI088 IMU (Sensor 3)
+# CS pins: PI4 = accel, PI8 = gyro
+# --------------------------------------------------------------------------
+PC10 SPI3_SCK  SPI3
+PB2  SPI3_MOSI SPI3
+PC11 SPI3_MISO SPI3
+PI4  BMI088_A_CS CS
+PI8  BMI088_G_CS CS
+PI7  BMI088_GYRO_DRDY INPUT
+
+# --------------------------------------------------------------------------
+# SPI5 - FM25V024-D FRAM (256Kbit = 32KB)
+# --------------------------------------------------------------------------
+PF7  SPI5_SCK  SPI5
+PF11 SPI5_MOSI SPI5
+PH7  SPI5_MISO SPI5
+PG7  FRAM_CS CS
+
+# --------------------------------------------------------------------------
+# SPI device definitions
+# name        bus   devid  cs_pin        mode  low_speed  high_speed
+# --------------------------------------------------------------------------
+SPIDEV icm20649  SPI1 DEVID1 ICM20649_CS  MODE3 2*MHZ  8*MHZ
+SPIDEV bmi088_g  SPI3 DEVID1 BMI088_G_CS  MODE3 10*MHZ 10*MHZ
+SPIDEV bmi088_a  SPI3 DEVID2 BMI088_A_CS  MODE3 10*MHZ 10*MHZ
+SPIDEV ramtron   SPI5 DEVID1 FRAM_CS      MODE3 8*MHZ  8*MHZ
+
+# --------------------------------------------------------------------------
+# IMU definitions - direct, no BOARD_MATCH() required
+#
+# ROTATION values depend on how the sensor is physically mounted on the PCB.
+# If attitude is wrong in Mission Planner after first boot:
+#   - Use the level calibration and check orientation with Flight Data view
+#   - Common alternatives: ROTATION_YAW_90, ROTATION_PITCH_180,
+#     ROTATION_ROLL_180_YAW_270, ROTATION_PITCH_180_YAW_90
+# --------------------------------------------------------------------------
+IMU Invensensev2 SPI:icm20649 ROTATION_NONE
+IMU BMI088 SPI:bmi088_a SPI:bmi088_g ROTATION_NONE
+
+# --------------------------------------------------------------------------
+# I2C buses
+# --------------------------------------------------------------------------
+
+# I2C1 - BMM150 onboard compass + GPS1 external port
+PB8 I2C1_SCL I2C1
+PB9 I2C1_SDA I2C1
+
+# I2C2 - GPS2 external magnetometer port
+PF1 I2C2_SCL I2C2
+PF0 I2C2_SDA I2C2
+
+# I2C3 - MS5611 footprint (empty on this board, pins kept for bus completeness)
+PA8 I2C3_SCL I2C3
+PH8 I2C3_SDA I2C3
+
+# I2C4 - SE050 secure element (no ArduPilot driver; pins defined for completeness)
+PF14 I2C4_SCL I2C4
+PF15 I2C4_SDA I2C4
+
+# I2C bus order: index 0=I2C1, 1=I2C2, 2=I2C3, 3=I2C4
+I2C_ORDER I2C1 I2C2 I2C3 I2C4
+
+# Internal bus mask: bit0=I2C1, bit2=I2C3 (BMP388), bit3=I2C4 (SE050) → 0b1101 = 13
+# I2C2 is external (GPS port connector)
+define HAL_I2C_INTERNAL_MASK 13
+
+# --------------------------------------------------------------------------
+# Barometer
+# Standard V6X places BMP388 on I2C4 (shared with SE050).
+# In our I2C_ORDER (I2C1 I2C2 I2C3 I2C4): I2C4 = bus index 3.
+# Standard addresses: 0x77 (SDO=VCC) primary, 0x76 (SDO=GND) alternate.
+# Also probe I2C2 (index 1) and I2C3 (index 2) as fallbacks.
+# --------------------------------------------------------------------------
+BARO BMP388 I2C:3:0x77
+BARO BMP388 I2C:3:0x76
+BARO BMP388 I2C:1:0x76
+BARO BMP388 I2C:1:0x77
+BARO BMP388 I2C:2:0x76
+BARO BMP388 I2C:2:0x77
+
+# --------------------------------------------------------------------------
+# Compass
+# BMM150 on I2C1 = bus index 0 in I2C_ORDER, address 0x10
+# false = internal (not external) compass
+# Adjust ROTATION_NONE if compass heading is wrong
+# --------------------------------------------------------------------------
+COMPASS BMM150 I2C:0:0x10 false ROTATION_NONE
+
+# Enable automatic probing for external compass on I2C2 (GPS port)
+define AP_COMPASS_PROBING_ENABLED 1
+
+# --------------------------------------------------------------------------
+# PWM outputs (FMU channels - same as Pixhawk V6X)
+# --------------------------------------------------------------------------
+PI0  TIM5_CH4  TIM5  PWM(1) GPIO(50)
+PH12 TIM5_CH3  TIM5  PWM(2) GPIO(51)
+PH11 TIM5_CH2  TIM5  PWM(3) GPIO(52)
+PH10 TIM5_CH1  TIM5  PWM(4) GPIO(53)
+PD13 TIM4_CH2  TIM4  PWM(5) GPIO(54)
+PD14 TIM4_CH3  TIM4  PWM(6) GPIO(55)
+# TIM12 has no TIMn_UP DMA option - must use NODMA
+PH6  TIM12_CH1 TIM12 PWM(7) GPIO(56) NODMA
+PH9  TIM12_CH2 TIM12 PWM(8) GPIO(57) NODMA
+
+# --------------------------------------------------------------------------
+# RC Input
+# PI5 = TIM8_CH1, PPM/serial RC from IOMCU
+# --------------------------------------------------------------------------
+PI5 TIM8_CH1 TIM8 RCININT PULLDOWN LOW
+
+# --------------------------------------------------------------------------
+# CAN buses
+# --------------------------------------------------------------------------
+PD0  CAN1_RX CAN1
+PD1  CAN1_TX CAN1
+PB12 CAN2_RX CAN2
+PB13 CAN2_TX CAN2
+
+# --------------------------------------------------------------------------
+# ADC - voltage monitoring
+# SCALE(2) = 3.3V ADC range scaled to read 0-6.6V
+# --------------------------------------------------------------------------
+PA0  SCALED_VDD_3V3_SENSORS1 ADC1 SCALE(2)
+PA4  SCALED_VDD_3V3_SENSORS2 ADC1 SCALE(2)
+PB0  SCALED_VDD_3V3_SENSORS3 ADC1 SCALE(2)
+PF12 SCALED_VDD_3V3_SENSORS4 ADC1 SCALE(2)
+PB1  VDD_5V_SENS              ADC1 SCALE(2)
+
+# --------------------------------------------------------------------------
+# Sensor power enable pins
+# These MUST be driven correctly or sensors will not respond to SPI/I2C probes
+# Active HIGH (drive HIGH to power on sensors)
+# --------------------------------------------------------------------------
+PI11 VDD_3V3_SENSORS1_EN OUTPUT HIGH
+PF4  VDD_3V3_SENSORS2_EN OUTPUT HIGH
+PE7  VDD_3V3_SENSORS3_EN OUTPUT HIGH
+PG8  VDD_3V3_SENSORS4_EN OUTPUT HIGH
+
+# Peripheral 5V power rails (active LOW - drive LOW to enable)
+PG10 nVDD_5V_HIPOWER_EN OUTPUT LOW
+PG4  nVDD_5V_PERIPH_EN  OUTPUT LOW
+
+# SD card 3.3V rail (active HIGH)
+PC13 VDD_3V3_SD_CARD_EN OUTPUT HIGH
+
+# --------------------------------------------------------------------------
+# Power monitoring (overcurrent / power valid signals)
+# --------------------------------------------------------------------------
+PG1  VDD_BRICK_nVALID   INPUT PULLUP
+PG2  VDD_BRICK2_nVALID  INPUT PULLUP
+PG3  VDD_BRICK3_nVALID  INPUT PULLUP
+PE15 VDD_5V_PERIPH_nOC  INPUT PULLUP
+PF13 VDD_5V_HIPOWER_nOC INPUT PULLUP
+
+# --------------------------------------------------------------------------
+# microSD card (SDMMC2)
+# --------------------------------------------------------------------------
+PD6  SDMMC2_CK  SDMMC2
+PD7  SDMMC2_CMD SDMMC2
+PB14 SDMMC2_D0  SDMMC2
+PB15 SDMMC2_D1  SDMMC2
+PG11 SDMMC2_D2  SDMMC2
+PB4  SDMMC2_D3  SDMMC2
+define FATFS_HAL_DEVICE SDCD2
+
+# --------------------------------------------------------------------------
+# Safety switch
+# --------------------------------------------------------------------------
+PD10 LED_SAFETY OUTPUT
+PF5  SAFETY_IN  INPUT PULLDOWN
+define HAL_HAVE_SAFETY_SWITCH 1
+
+# --------------------------------------------------------------------------
+# RGB status LEDs (active LOW, open-drain)
+# --------------------------------------------------------------------------
+PE3 LED_RED   OUTPUT OPENDRAIN GPIO(90) HIGH
+PE4 LED_GREEN OUTPUT OPENDRAIN GPIO(91) HIGH
+PE5 LED_BLUE  OUTPUT OPENDRAIN GPIO(92) HIGH
+
+define AP_NOTIFY_GPIO_LED_RGB_RED_PIN   90
+define AP_NOTIFY_GPIO_LED_RGB_GREEN_PIN 91
+define AP_NOTIFY_GPIO_LED_RGB_BLUE_PIN  92
+define AP_NOTIFY_GPIO_LED_RGB_ENABLED 1
+
+# Armed indication LED (active LOW)
+PE6 nARMED OUTPUT HIGH
+
+# --------------------------------------------------------------------------
+# Buzzer (PWM-driven via TIM14)
+# --------------------------------------------------------------------------
+PF9 TIM14_CH1 TIM14 GPIO(77) ALARM
+
+# --------------------------------------------------------------------------
+# Spektrum satellite receiver power enable
+# --------------------------------------------------------------------------
+PH2 SPEKTRUM_PWR OUTPUT HIGH GPIO(73)
+define HAL_GPIO_SPEKTRUM_PWR 73
+define HAL_SPEKTRUM_PWR_ENABLED 1
+
+# --------------------------------------------------------------------------
+# Hardware version sense (drive the sense rail low for sensing)
+# --------------------------------------------------------------------------
+PG0 HW_VER_REV_DRIVE OUTPUT LOW
+
+# NFC GPIO (input only)
+PC0 NFC_GPIO INPUT GPIO(60)
+
+# --------------------------------------------------------------------------
+# FRAM parameter storage
+# FM25V024-D = 256Kbit = 32768 bytes
+# HAL_WITH_RAMTRON uses the ramtron SPI device defined above
+# --------------------------------------------------------------------------
+define HAL_STORAGE_SIZE 32768
+define HAL_WITH_RAMTRON 1
+
+# --------------------------------------------------------------------------
+# FAT filesystem on SD card
+# --------------------------------------------------------------------------
+define HAL_OS_FATFS_IO 1
+
+# --------------------------------------------------------------------------
+# DMA channel priority
+# USART6 first (IOMCU), then SD, then peripherals
+# --------------------------------------------------------------------------
+DMA_PRIORITY SDMMC* USART6* ADC* UART* USART* SPI* TIM*
+
+# --------------------------------------------------------------------------
+# IOMCU firmware - bundled into flash and auto-loaded on boot
+# IO processor handles RC input and PWM failsafe
+# --------------------------------------------------------------------------
+ROMFS io_firmware.bin       Tools/IO_Firmware/iofirmware_f103_lowpolh.bin
+ROMFS io_firmware_dshot.bin Tools/IO_Firmware/iofirmware_f103_dshot_lowpolh.bin
+define HAL_WITH_IO_MCU_BIDIR_DSHOT 1
+
+# Disable ArduPilot bootloader embedding - we use the PX4 V6X bootloader.
+# Firmware is flashed as .apj via Mission Planner using the PX4 bootloader protocol.
+define AP_BOOTLOADER_FLASHING_ENABLED 0
